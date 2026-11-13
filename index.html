@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Optimális célzás — konvex hétszög</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#eaf1ff;background:#0b1220}
+*{box-sizing:border-box}body{margin:0;padding:22px}.wrap{max-width:1160px;margin:auto}
+h1{font-size:clamp(24px,3vw,35px);margin:0 0 8px;letter-spacing:-.04em}p{color:#aab9d2;line-height:1.5}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;margin-top:18px}
+.panel{background:#111c2e;border:1px solid #263650;border-radius:18px;padding:18px;box-shadow:0 8px 35px #0002}
+canvas{width:100%;display:block;touch-action:none;cursor:crosshair;border-radius:12px;background:#0d1727}
+#view{aspect-ratio:1.28}#plot{aspect-ratio:2.3}
+label{display:block;font-size:13px;font-weight:700;color:#d8e5fa;margin:18px 0 8px}
+input[type=range]{width:100%;accent-color:#fbad5b}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.value{font-size:25px;font-weight:750;font-variant-numeric:tabular-nums}
+.stat{padding:12px 0;border-bottom:1px solid #293952;display:flex;justify-content:space-between;gap:12px}
+.stat span:first-child{color:#9fb1cd}.stat strong{font-variant-numeric:tabular-nums}
+button{background:#243955;color:#eaf1ff;border:1px solid #3a5578;border-radius:10px;padding:10px 13px;cursor:pointer;font-weight:650}
+button:hover{background:#345074}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#b4c6dd;margin-top:12px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.note{font-size:12px;color:#9aabc3;line-height:1.55;margin-top:14px}
+.tag{display:inline-block;border-radius:20px;padding:5px 10px;background:#203e40;color:#9ce1d0;font-size:12px;font-weight:700}
+@media(max-width:820px){.layout{grid-template-columns:1fr}body{padding:12px}.panel{padding:12px}}
+</style></head><body><div class="wrap">
+<h1>Optimális célzás saját konvex sokszögre</h1>
+<p>Rajzolj saját sokszöget kattintásokkal, vagy húzd a meglévő csúcsokat; változtasd a pontossági kör sugarát, és figyeld, hová érdemes célozni. A számítás a kör–sokszög metszet <b>pontos területképletét</b> és numerikus maximumkeresést használ.</p>
+<div class="layout">
+<section class="panel">
+<div class="row"><b>Geometriai nézet</b><span class="tag" id="status">Számítás</span></div>
+<canvas id="view"></canvas>
+<div class="legend"><span><i class="dot" style="background:#56b6e9"></i>Sokszög</span><span><i class="dot" style="background:#f4aa55"></i>Pontossági kör</span><span><i class="dot" style="background:#f778a6"></i>Optimális középpont</span><span><i class="dot" style="background:#b8a6ff"></i>Optimális pálya</span></div>
+<div style="margin-top:22px"><div class="row"><b>Optimális célzási pálya</b><small style="color:#91a5c3">x és y a sugár függvényében</small></div><canvas id="plot"></canvas></div>
+<p class="note">A csúcsok húzása csak akkor engedélyezett, ha a sokszög konvex marad. A lila pálya numerikus mintavétel; a lapos optimumszakaszokat a program közelítőleg kezeli.</p>
+</section>
+<aside class="panel">
+<div class="row"><b>Pontosság beállítása</b><span id="rval" class="value">2.00</span></div>
+<input type="range" id="radius" min=".15" max="8" step=".025" value="2.4">
+<div class="row"><small style="color:#91a5c3">Kisebb sugár = pontosabb célzás</small></div>
+<div class="stat"><span>Találati esély</span><strong id="chance">—</strong></div>
+<div class="stat"><span>Metszet területe</span><strong id="area">—</strong></div>
+<div class="stat"><span>Beírt kör sugara, ρ</span><strong id="rho">—</strong></div>
+<div class="stat"><span>Köré írt kör sugara, R</span><strong id="R">—</strong></div>
+<div class="stat"><span>Optimális x</span><strong id="x">—</strong></div>
+<div class="stat"><span>Optimális y</span><strong id="y">—</strong></div>
+<div class="actions"><button id="startdraw">✏️ Saját alakzat rajzolása</button><button id="finishdraw" style="display:none">✓ Rajz kész</button><button id="undo" style="display:none">↶ Utolsó pont törlése</button><button id="canceldraw" style="display:none">Mégse</button></div><p id="drawhint" class="note" style="display:none;color:#a9d9ff">Kattints a rajzterületre legalább 3 pontot, majd nyomd meg a „Rajz kész” gombot. A program a pontok konvex burkát veszi.</p><div class="actions"><button id="reset">Alaphelyzet</button><button id="random">Új hétszög</button><button id="path">Pálya újraszámítása</button></div>
+<label><input id="showpath" type="checkbox" checked> Optimális pálya megjelenítése</label>
+<p class="note">A köré írt kör középpontja <b>R</b> sugárnál optimális. Ha <b>r ≤ ρ</b>, elérhető a 100%-os találati esély. Köztes sugaraknál az optimumot numerikusan számítjuk.</p>
+<p class="note">A középpont közelítő numerikus eredmény; az optimális pontok teljes halmazának bizonyított meghatározására ez a program nem vállalkozik.</p>
+</aside></div></div>
+<script>
+const V=document.getElementById('view'),C=V.getContext('2d'),T=document.getElementById('plot'),G=T.getContext('2d');
+const $=id=>document.getElementById(id), PI=Math.PI, EPS=1e-9;
+let drawing=false,drawPoints=[];let poly=[],opt={x:0,y:0},rho=0,R=0,incenter={x:0,y:0},outcenter={x:0,y:0},path=[],drag=-1,dirty=true, lastSize={};
+const add=(a,b)=>({x:a.x+b.x,y:a.y+b.y}),sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y}),mul=(a,t)=>({x:a.x*t,y:a.y*t}),dot=(a,b)=>a.x*b.x+a.y*b.y,cross=(a,b)=>a.x*b.y-a.y*b.x,norm=a=>Math.hypot(a.x,a.y),dist=(a,b)=>norm(sub(a,b));
+function original(){const radii=[3.2,3.85,3.05,3.5,3.7,2.95,3.8];poly=radii.map((rr,i)=>{let t=-PI/2+2*PI*i/7;return{x:rr*Math.cos(t),y:rr*Math.sin(t)}});if(!convex(poly))regular()}
+function regular(){poly=Array.from({length:7},(_,i)=>({x:3.5*Math.cos(-PI/2+i*2*PI/7),y:3.5*Math.sin(-PI/2+i*2*PI/7)}))}
+function convex(p){let s=0;for(let i=0;i<p.length;i++){let z=cross(sub(p[(i+1)%p.length],p[i]),sub(p[(i+2)%p.length],p[(i+1)%p.length]));if(Math.abs(z)<1e-5)return false;if(s&&z*s<0)return false;s=z}return s>0}
+function areaPoly(p){let a=0;for(let i=0;i<p.length;i++)a+=cross(p[i],p[(i+1)%p.length]);return Math.abs(a)/2}
+function segCircle(a,b,r){let d=sub(b,a),aa=dot(d,d),bb=2*dot(a,d),cc=dot(a,a)-r*r,ts=[0,1],disc=bb*bb-4*aa*cc;
+if(disc>0){let s=Math.sqrt(disc),u=(-bb-s)/(2*aa),v=(-bb+s)/(2*aa);if(u>0&&u<1)ts.push(u);if(v>0&&v<1)ts.push(v)}ts.sort((x,y)=>x-y);
+let total=0;for(let i=0;i<ts.length-1;i++){let u=ts[i],v=ts[i+1],p=add(a,mul(d,u)),q=add(a,mul(d,v)),mid=add(a,mul(d,(u+v)/2));total+=dot(mid,mid)<r*r ? cross(p,q)/2 : r*r*Math.atan2(cross(p,q),dot(p,q))/2}return total}
+function intersection(c,r){let total=0;for(let i=0;i<poly.length;i++)total+=segCircle(sub(poly[i],c),sub(poly[(i+1)%poly.length],c),r);return Math.max(0,Math.min(areaPoly(poly),Math.abs(total)))}
+function centroid(){let a=0,cx=0,cy=0;for(let i=0;i<poly.length;i++){let p=poly[i],q=poly[(i+1)%poly.length],z=cross(p,q);a+=z;cx+=(p.x+q.x)*z;cy+=(p.y+q.y)*z}return{x:cx/(3*a),y:cy/(3*a)}}
+function inside(p){for(let i=0;i<poly.length;i++)if(cross(sub(poly[(i+1)%poly.length],poly[i]),sub(p,poly[i]))<-1e-7)return false;return true}
+function minEdgeDist(p){let d=Infinity;for(let i=0;i<poly.length;i++){let a=poly[i],b=poly[(i+1)%poly.length];d=Math.min(d,cross(sub(b,a),sub(p,a))/dist(a,b))}return d}
+function optimize(fn,starts,step=.8,tol=1e-5){let best=null,bv=-Infinity;for(let s of starts){let p={...s},v=fn(p),h=step;for(let k=0;k<115&&h>tol;k++){let changed=false;for(let a=0;a<8;a++){let t=a*PI/4,q={x:p.x+h*Math.cos(t),y:p.y+h*Math.sin(t)},w=fn(q);if(w>v+1e-11){p=q;v=w;changed=true}}if(!changed)h*=.5}if(v>bv){best=p;bv=v}}return{point:best,value:bv}}
+function circum(){let candidates=[];for(let i=0;i<poly.length;i++)for(let j=i+1;j<poly.length;j++)candidates.push(mul(add(poly[i],poly[j]),.5));for(let i=0;i<poly.length;i++)for(let j=i+1;j<poly.length;j++)for(let k=j+1;k<poly.length;k++){let a=poly[i],b=poly[j],c=poly[k],u=sub(b,a),v=sub(c,a),den=2*cross(u,v);if(Math.abs(den)<1e-9)continue;let w={x:(dot(u,u)*v.y-dot(v,v)*u.y)/den,y:(dot(v,v)*u.x-dot(u,u)*v.x)/den};candidates.push(add(a,w))}let best=null,rad=Infinity;for(let p of candidates){let rr=Math.max(...poly.map(q=>dist(p,q)));if(rr<rad){rad=rr;best=p}}return{point:best,r:rad}}
+function recomputeGeometry(){let cc=centroid();let inc=optimize(p=>inside(p)?minEdgeDist(p):-1000,[cc,...poly.map(p=>mul(add(p,cc),.5))],1.5,1e-7);incenter=inc.point;rho=inc.value;let o=circum();outcenter=o.point;R=o.r;$('rho').textContent=rho.toFixed(3);$('R').textContent=R.toFixed(3);$('radius').max=(R*1.23).toFixed(2);dirty=true}
+function solve(r,previous){if(r<=rho+1e-7)return{point:incenter,value:PI*r*r};if(r>=R-1e-7)return{point:outcenter,value:areaPoly(poly)};
+let starts=[previous||incenter,incenter,outcenter,centroid(),...poly.map(p=>mul(add(p,incenter),.5))];
+let z=optimize(p=>intersection(p,r),starts,1.1,2e-5);return z}
+function calculatePath(){let N=48,prev=outcenter;path=[];for(let i=0;i<=N;i++){let r=R-(R-Math.max(.06,rho*.65))*i/N;let z=solve(r,prev);prev=z.point;path.push({r,p:z.point})}dirty=false}
+function bounds(){let xs=poly.map(p=>p.x),ys=poly.map(p=>p.y),r=+$('radius').value;let m=Math.max(1.2,r*.9);return{x0:Math.min(...xs,opt.x-r)-m,x1:Math.max(...xs,opt.x+r)+m,y0:Math.min(...ys,opt.y-r)-m,y1:Math.max(...ys,opt.y+r)+m}}
+function fitCanvas(el,ctx){let dpr=Math.min(2,devicePixelRatio||1),w=el.clientWidth,h=el.clientHeight;el.width=Math.round(w*dpr);el.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);return{w,h}}
+let trans;
+function draw(){let {w,h}=fitCanvas(V,C),b=bounds(),scale=Math.min((w-40)/(b.x1-b.x0),(h-40)/(b.y1-b.y0)),mx=(b.x0+b.x1)/2,my=(b.y0+b.y1)/2;trans={w,h,scale,mx,my};const xy=p=>({x:w/2+(p.x-mx)*scale,y:h/2-(p.y-my)*scale});
+C.clearRect(0,0,w,h);C.strokeStyle='#1d3049';C.lineWidth=1;let spacing=scale<38?2:1;for(let x=Math.floor(b.x0/spacing)*spacing;x<=b.x1;x+=spacing){let px=xy({x,y:0}).x;C.beginPath();C.moveTo(px,0);C.lineTo(px,h);C.stroke()}for(let y=Math.floor(b.y0/spacing)*spacing;y<=b.y1;y+=spacing){let py=xy({x:0,y}).y;C.beginPath();C.moveTo(0,py);C.lineTo(w,py);C.stroke()}
+function polygonPath(){C.beginPath();poly.forEach((p,i)=>{let q=xy(p);if(i)C.lineTo(q.x,q.y);else C.moveTo(q.x,q.y)});C.closePath()}
+polygonPath();C.fillStyle='#3289b54a';C.fill();C.save();polygonPath();C.clip();let o=xy(opt),r=+$('radius').value;C.beginPath();C.arc(o.x,o.y,r*scale,0,2*PI);C.fillStyle='#f4aa5560';C.fill();C.restore();
+if($('showpath').checked&&path.length){C.beginPath();path.forEach((z,i)=>{let p=xy(z.p);if(i)C.lineTo(p.x,p.y);else C.moveTo(p.x,p.y)});C.strokeStyle='#b8a6ff';C.lineWidth=2.5;C.stroke()}
+polygonPath();C.strokeStyle='#58b9ed';C.lineWidth=2.7;C.stroke();o=xy(opt);r=+$('radius').value;C.beginPath();C.arc(o.x,o.y,r*scale,0,2*PI);C.strokeStyle='#f6ac58';C.lineWidth=2.3;C.stroke();C.setLineDash([4,5]);C.beginPath();C.moveTo(o.x-12,o.y);C.lineTo(o.x+12,o.y);C.moveTo(o.x,o.y-12);C.lineTo(o.x,o.y+12);C.strokeStyle='#f778a6';C.stroke();C.setLineDash([]);C.beginPath();C.arc(o.x,o.y,5.2,0,2*PI);C.fillStyle='#f778a6';C.fill();poly.forEach((p,i)=>{let q=xy(p);C.beginPath();C.arc(q.x,q.y,6,0,2*PI);C.fillStyle=i===drag?'#fff':'#72c8f0';C.fill();C.fillStyle='#e3f2ff';C.font='12px system-ui';C.fillText(String(i+1),q.x+9,q.y-8)});drawPlot();if(drawing){C.strokeStyle="#f3d274";C.lineWidth=2;C.setLineDash([6,4]);C.beginPath();drawPoints.forEach((p,i)=>{let q=xy(p);if(i)C.lineTo(q.x,q.y);else C.moveTo(q.x,q.y)});C.stroke();C.setLineDash([]);drawPoints.forEach((p,i)=>{let q=xy(p);C.beginPath();C.arc(q.x,q.y,5,0,2*PI);C.fillStyle="#f3d274";C.fill();C.fillStyle="#fff";C.font="12px system-ui";C.fillText(String(i+1),q.x+8,q.y-8)})}}
+function drawPlot(){let {w,h}=fitCanvas(T,G);G.clearRect(0,0,w,h);if(path.length<2)return;let pad={l:38,r:15,t:16,b:24},ww=w-pad.l-pad.r,hh=h-pad.t-pad.b;let lo=Math.min(...path.flatMap(z=>[z.p.x,z.p.y]))-.35,hi=Math.max(...path.flatMap(z=>[z.p.x,z.p.y]))+.35;let X=r=>pad.l+r/R*ww,Y=v=>pad.t+(hi-v)/(hi-lo)*hh;
+G.strokeStyle='#31435c';G.lineWidth=1;for(let j=0;j<=4;j++){let yy=pad.t+j*hh/4;G.beginPath();G.moveTo(pad.l,yy);G.lineTo(w-pad.r,yy);G.stroke()}G.font='11px system-ui';G.fillStyle='#9fb0c9';G.fillText('0',pad.l,h-7);G.fillText('r = '+R.toFixed(2),w-75,h-7);
+for(let [key,color] of [['x','#78c8ee'],['y','#efab78']]){G.beginPath();path.forEach((z,i)=>{let x=X(z.r),y=Y(z.p[key]);if(i)G.lineTo(x,y);else G.moveTo(x,y)});G.strokeStyle=color;G.lineWidth=2.4;G.stroke()}
+let r=+$('radius').value;G.setLineDash([3,5]);G.strokeStyle='#f778a6';G.beginPath();G.moveTo(X(Math.min(r,R)),pad.t);G.lineTo(X(Math.min(r,R)),h-pad.b);G.stroke();G.setLineDash([]);G.fillStyle='#78c8ee';G.fillText('x',w-34,16);G.fillStyle='#efab78';G.fillText('y',w-20,16)}
+function update(full=false){let r=+$('radius').value;$('rval').textContent=r.toFixed(2);if(full||dirty)calculatePath();let result=solve(r,opt);opt=result.point;let p=Math.min(1,result.value/(PI*r*r));$('chance').textContent=(100*p).toFixed(2)+'%';$('area').textContent=result.value.toFixed(3);$('x').textContent=opt.x.toFixed(3);$('y').textContent=opt.y.toFixed(3);$('status').textContent=r<=rho?'100% elérhető':r>=R?'Teljes sokszög lefedve':'Numerikus optimum';draw()}
+function pointer(e){let rect=V.getBoundingClientRect(),px=(e.clientX-rect.left),py=e.clientY-rect.top;return{x:trans.mx+(px-trans.w/2)/trans.scale,y:trans.my-(py-trans.h/2)/trans.scale}}
+V.addEventListener('pointerdown',e=>{if(drawing){let p=pointer(e);if(!drawPoints.some(q=>dist(p,q)<8/trans.scale)){drawPoints.push(p);$('drawhint').textContent=drawPoints.length+' pont felvéve. Kattints tovább, vagy válaszd a „Rajz kész” gombot. A program a pontok konvex burkát használja.';draw()}return}let p=pointer(e),i=poly.findIndex(v=>dist(p,v)<12/trans.scale);if(i>=0){drag=i;V.setPointerCapture(e.pointerId);draw()}});
+V.addEventListener('pointermove',e=>{if(drawing||drag<0)return;let p=pointer(e),next=poly.map(q=>({...q}));next[drag]=p;if(convex(next)){poly=next;recomputeGeometry();update(true)}});
+V.addEventListener('pointerup',()=>{drag=-1;draw()});V.addEventListener('pointercancel',()=>{drag=-1;draw()});
+function hull(points){let ps=[...points].sort((a,b)=>a.x-b.x||a.y-b.y),low=[],high=[];for(let p of ps){while(low.length>=2&&cross(sub(low[low.length-1],low[low.length-2]),sub(p,low[low.length-1]))<=1e-7)low.pop();low.push(p)}for(let p of [...ps].reverse()){while(high.length>=2&&cross(sub(high[high.length-1],high[high.length-2]),sub(p,high[high.length-1]))<=1e-7)high.pop();high.push(p)}low.pop();high.pop();return low.concat(high)}
+function toggleDraw(on){drawing=on;drag=-1;for(let id of ['finishdraw','undo','canceldraw','drawhint'])$(id).style.display=on?'':'none';$('startdraw').style.display=on?'none':'';V.style.cursor=on?'crosshair':'default';if(!on)drawPoints=[];draw()}
+$('startdraw').addEventListener('click',()=>{drawPoints=[];toggleDraw(true);$('drawhint').textContent='Kattints legalább három pontra a rajzterületen. A kész alakzat konvex burkát számítjuk.'});
+$('undo').addEventListener('click',()=>{drawPoints.pop();draw()});
+$('canceldraw').addEventListener('click',()=>toggleDraw(false));
+$('finishdraw').addEventListener('click',()=>{let h=hull(drawPoints);if(h.length<3||areaPoly(h)<.01){$('drawhint').textContent='Legalább 3 nem egy egyenesre eső pont szükséges.';return}let removed=drawPoints.length-h.length;poly=h;toggleDraw(false);recomputeGeometry();opt=outcenter;update(true);$('status').textContent=removed?'Saját sokszög (belső pontok kihagyva)':'Saját sokszög'});
+$('radius').addEventListener('input' ,()=>update());$('showpath').addEventListener('change',draw);
+$('reset').addEventListener('click',()=>{if(drawing)toggleDraw(false);original();recomputeGeometry();$('radius').value=Math.min(2.4,R).toFixed(2);update(true)});
+$('random').addEventListener('click',()=>{if(drawing)toggleDraw(false);let ok=false;for(let t=0;t<100&&!ok;t++){let rr=Array.from({length:7},()=>2.6+Math.random()*1.4),p=rr.map((r,i)=>({x:r*Math.cos(-PI/2+i*2*PI/7),y:r*Math.sin(-PI/2+i*2*PI/7)}));if(convex(p)){poly=p;ok=true}}if(!ok)regular();recomputeGeometry();update(true)});
+$('path').addEventListener('click',()=>update(true));window.addEventListener('resize',draw);
+original();recomputeGeometry();opt=outcenter;update(true);
+</script></body></html>
