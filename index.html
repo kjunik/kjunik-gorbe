@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="hu"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hova kell célozni?</title>
+<title>Optimális célzás — hol jársz a Kjunik görbén?</title>
 <style>
 :root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#eaf1ff;background:#0b1220}
 *{box-sizing:border-box}body{margin:0;padding:22px}.wrap{max-width:1160px;margin:auto}
@@ -23,15 +23,15 @@ button:hover{background:#345074}.actions{display:flex;gap:8px;flex-wrap:wrap;mar
 .tag{display:inline-block;border-radius:20px;padding:5px 10px;background:#203e40;color:#9ce1d0;font-size:12px;font-weight:700}
 @media(max-width:820px){.layout{grid-template-columns:1fr}body{padding:12px}.panel{padding:12px}}
 </style></head><body><div class="wrap">
-<h1>Optimális célzás</h1>
-<p>asd</p>
+<h1>Hova kell célozni?</h1>
+<p>Rajzolj saját gyengepontot kattintásokkal, vagy húzd a meglévő csúcspontjaid; változtasd a célzókör kör sugarát, és figyeld, hová érdemes célozni. A számítás a kör–sokszög metszet <b>pontos területképletét</b> és numerikus maximumkeresést használ.</p>
 <div class="layout">
 <section class="panel">
-<div class="row"><b>Geometriai nézet</b><span class="tag" id="status">Számítás</span></div>
+<div class="row"><b>Ábra:</b><span class="tag" id="status">Számítás</span></div>
 <canvas id="view"></canvas>
-<div class="legend"><span><i class="dot" style="background:#56b6e9"></i>Sokszög</span><span><i class="dot" style="background:#f4aa55"></i>Pontossági kör</span><span><i class="dot" style="background:#f778a6"></i>Optimális középpont</span><span><i class="dot" style="background:#b8a6ff"></i>Optimális pálya</span></div>
+<div class="legend"><span><i class="dot" style="background:#56b6e9"></i>Sokszög</span><span><i class="dot" style="background:#f4aa55"></i>Pontossági kör</span><span><i class="dot" style="background:#f778a6"></i>Optimális középpont</span><span><i class="dot" style="background:#b8a6ff"></i>Kjunik görbe</span></div>
 <div style="margin-top:22px"><div class="row"><b>Optimális célzási pálya</b><small style="color:#91a5c3">x és y a sugár függvényében</small></div><canvas id="plot"></canvas></div>
-<p class="note">A csúcsok húzása csak akkor engedélyezett, ha a sokszög konvex marad. A lila pálya numerikus mintavétel; a lapos optimumszakaszokat a program közelítőleg kezeli.</p>
+
 </section>
 <aside class="panel">
 <div class="row"><b>Pontosság beállítása</b><span id="rval" class="value">2.00</span></div>
@@ -43,8 +43,8 @@ button:hover{background:#345074}.actions{display:flex;gap:8px;flex-wrap:wrap;mar
 <div class="stat"><span>Köré írt kör sugara, R</span><strong id="R">—</strong></div>
 <div class="stat"><span>Optimális x</span><strong id="x">—</strong></div>
 <div class="stat"><span>Optimális y</span><strong id="y">—</strong></div>
-<div class="actions"><button id="startdraw">✏️ Saját alakzat rajzolása</button><button id="finishdraw" style="display:none">✓ Rajz kész</button><button id="undo" style="display:none">↶ Utolsó pont törlése</button><button id="canceldraw" style="display:none">Mégse</button></div><p id="drawhint" class="note" style="display:none;color:#a9d9ff">Kattints a rajzterületre legalább 3 pontot, majd nyomd meg a „Rajz kész” gombot. A program a pontok konvex burkát veszi.</p><div class="actions"><button id="reset">Alaphelyzet</button><button id="random">Új hétszög</button><button id="path">Pálya újraszámítása</button></div>
-<label><input id="showpath" type="checkbox" checked> Optimális pálya megjelenítése</label>
+<div class="actions"><button id="startdraw">✏️ Saját alakzat rajzolása</button><button id="finishdraw" style="display:none">✓ Rajz kész</button><button id="undo" style="display:none">↶ Utolsó pont törlése</button><button id="canceldraw" style="display:none">Mégse</button></div><p id="drawhint" class="note" style="display:none;color:#a9d9ff">Kattints a rajzterületre legalább 3 pontot, majd nyomd meg a „Rajz kész” gombot. A program a pontok konvex burkát veszi.</p><div class="actions"><button id="reset">Alaphelyzet</button><button id="path">Pálya újraszámítása</button></div>
+<label><input id="showpath" type="checkbox" checked> Kjunik-görbe megjelenítése</label>
 <p class="note">A köré írt kör középpontja <b>R</b> sugárnál optimális. Ha <b>r ≤ ρ</b>, elérhető a 100%-os találati esély. Köztes sugaraknál az optimumot numerikusan számítjuk.</p>
 <p class="note">A középpont közelítő numerikus eredmény; az optimális pontok teljes halmazának bizonyított meghatározására ez a program nem vállalkozik.</p>
 </aside></div></div>
@@ -110,7 +110,6 @@ $('canceldraw').addEventListener('click',()=>toggleDraw(false));
 $('finishdraw').addEventListener('click',()=>{let h=hull(drawPoints);if(h.length<3||areaPoly(h)<.01){$('drawhint').textContent='Legalább 3 nem egy egyenesre eső pont szükséges.';return}let removed=drawPoints.length-h.length;poly=h;toggleDraw(false);recomputeGeometry();opt=outcenter;update(true);$('status').textContent=removed?'Saját sokszög (belső pontok kihagyva)':'Saját sokszög'});
 $('radius').addEventListener('input' ,()=>update());$('showpath').addEventListener('change',draw);
 $('reset').addEventListener('click',()=>{if(drawing)toggleDraw(false);original();recomputeGeometry();$('radius').value=Math.min(2.4,R).toFixed(2);update(true)});
-$('random').addEventListener('click',()=>{if(drawing)toggleDraw(false);let ok=false;for(let t=0;t<100&&!ok;t++){let rr=Array.from({length:7},()=>2.6+Math.random()*1.4),p=rr.map((r,i)=>({x:r*Math.cos(-PI/2+i*2*PI/7),y:r*Math.sin(-PI/2+i*2*PI/7)}));if(convex(p)){poly=p;ok=true}}if(!ok)regular();recomputeGeometry();update(true)});
 $('path').addEventListener('click',()=>update(true));window.addEventListener('resize',draw);
 // Induláskor nincs automatikus hétszög: üres vásznon kezdődik a rajzolás.
 poly=[];path=[];drawPoints=[];toggleDraw(true);
